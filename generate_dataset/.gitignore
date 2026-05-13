@@ -1,0 +1,9 @@
+#無視するディレクトリ
+/img/
+/npz_files/
+/m1_npz/
+/m2_npz/
+/m3_npz/
+/m1_anotation/
+/m2_anotation/
+/m3_anotation/

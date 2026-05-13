@@ -1,0 +1,13 @@
+# ディレクトリ
+generate_dataset/m1_anotation
+generate_dataset/m2_anotation
+generate_dataset/m3_anotation
+generate_dataset/m1_npz/
+generate_dataset/m2_npz/
+generate_dataset/m3_npz/
+generate_dataset/est_npz/
+
+2026_gakkai/
+
+# ファイル
+Assembly-CSharp.csproj
