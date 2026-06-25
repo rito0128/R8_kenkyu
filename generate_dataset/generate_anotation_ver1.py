@@ -8,7 +8,7 @@ from bpy_extras.object_utils import world_to_camera_view
 
 # --- 設定 ---
 CAMERA_NAMES = ["Camera1"]
-OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generate_dateset/ganerated_demo_img/"
+OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generated_demo_img/"
 
 # アノテーションデータの書き出し先ファイル
 OUTPUT_2d = os.path.join(OUTPUT_DIR, 'test_2d_annotation.npz')
@@ -24,10 +24,10 @@ RESOLUTION_Y = 1000
 # キーポイントインデックスとボーン名の対応付け
 BONE_INDEX_MAP = {
     'mixamorig:Hips': 7, 'mixamorig:Spine': 8, 'mixamorig:Neck': 9, 'mixamorig:Head': 10,
-    'waist.001.l': 4, 'waist.001.r': 1, 'mixamorig:LeftShoulder': 11, 'mixamorig:LeftArm': 12,
-    'mixamorig:LefForcetArm': 13, 'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightArm': 16,
-    'mixamorig:LeftUpLeg': 5, 'mixamorig:LeftLeg': 6, 'mixamorig:Left': 0, 'leg.001.r': 2,
-    'leg.002.r': 3, 'feet.001.r': 0, 'mixamorig:Spine1': 17, 'mixamorig:Spine2': 18
+    'mixamorig:LeftShoulder': 11, 'mixamorig:LeftArm': 12, 'mixamorig:LeftForeArm': 13,
+    'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightForeArm': 16,
+    'mixamorig:LeftUpLeg': 5, 'mixamorig:LeftLeg': 6, 'mixamorig:LeftFoot': 0, 'mixamorig:RightUpLeg': 2,
+    'mixamorig:RightLeg': 3, 'mixamorig:RightFoot': 0, 'mixamorig:Spine1': 17, 'mixamorig:Spine2': 18
 }
 # --------------------
 
@@ -123,6 +123,23 @@ def process_animation_frames():
         return
 
     action = armature.animation_data.action
+    
+    # ====================================================================
+    # 【確実な対策】HipsボーンのX移動(array_index=0)とY移動(array_index=1)のFカーブを削除
+    # ====================================================================
+    fcurves_to_remove = []
+    for fc in action.fcurves:
+        # mixamorig:Hipsボーンの位置アニメーションを探す
+        if 'pose.bones["mixamorig:Hips"].location' in fc.data_path:
+            # array_index: 0=X, 1=Y, 2=Z。 XとY（水平移動）のデータを削除対象にする
+            if fc.array_index in [0, 1]:
+                fcurves_to_remove.append(fc)
+                
+    for fc in fcurves_to_remove:
+        action.fcurves.remove(fc)
+    print(f"🧹 Hipsボーンの水平移動データをアニメーションから削除しました。")
+    # ====================================================================
+    
     start_frame = int(action.frame_range[0])
     end_frame = int(action.frame_range[1])
     
