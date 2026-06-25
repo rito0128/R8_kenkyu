@@ -8,6 +8,7 @@ generate_dataset/m3_npz/
 generate_dataset/est_npz/
 
 2026_gakkai/
+generated_demo_img/
 
 # ファイル
 Assembly-CSharp.csproj
