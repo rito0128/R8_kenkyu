@@ -7,7 +7,7 @@ from mathutils import Vector, Quaternion, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 
 # --- 設定 ---
-CAMERA_NAMES = ["Camera1"]
+CAMERA_NAMES = ["Camera1", "Camera2"]
 OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generated_demo_img/"
 
 # アノテーションデータの書き出し先ファイル
