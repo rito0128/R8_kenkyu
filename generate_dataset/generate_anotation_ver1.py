@@ -25,8 +25,8 @@ RESOLUTION_Y = 1000
 BONE_INDEX_MAP = {
     'mixamorig:Hips': 7, 'mixamorig:Spine': 8, 'mixamorig:Neck': 9, 'mixamorig:Head': 10,
     'waist.001.l': 4, 'waist.001.r': 1, 'mixamorig:LeftShoulder': 11, 'mixamorig:LeftArm': 12,
-    'mixamorig:LefForcetArm': 13, 'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightForceArm': 16,
-    'leg.001.l': 5, 'leg.002.l': 6, 'feet.001.l': 0, 'leg.001.r': 2,
+    'mixamorig:LefForcetArm': 13, 'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightArm': 16,
+    'mixamorig:LeftUpLeg': 5, 'mixamorig:LeftLeg': 6, 'mixamorig:Left': 0, 'leg.001.r': 2,
     'leg.002.r': 3, 'feet.001.r': 0, 'mixamorig:Spine1': 17, 'mixamorig:Spine2': 18
 }
 # --------------------
