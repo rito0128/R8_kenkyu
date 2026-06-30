@@ -3,6 +3,7 @@ import math
 import os
 import glob
 import numpy as np
+import csv
 from mathutils import Vector, Quaternion, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 
@@ -11,8 +12,8 @@ CAMERA_NAMES = ["Camera1", "Camera2"]
 OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generated_demo_img/"
 
 # アノテーションデータの書き出し先ファイル
-OUTPUT_2d = os.path.join(OUTPUT_DIR, 'test_2d_annotation.npz')
-OUTPUT_3d = os.path.join(OUTPUT_DIR, 'test_3d_annotation.npz')
+OUTPUT_2d = os.path.join(OUTPUT_DIR, 'test_2d_annotation.csv')
+OUTPUT_3d = os.path.join(OUTPUT_DIR, 'test_3d_annotation.csv')
 
 ARMATURE_NAME = "Armature"
 
@@ -107,11 +108,24 @@ def get_keypoint3d(scene, camera, armature_name):
 
     return keypoint_3d
 
-def arrange_and_collect_keypoint(keypoint_data):
-    """辞書データをソートされたNumPy配列(1, 17, N)に整形する"""
+def flatten_keypoint_data(keypoint_data):
+    """辞書データをキーポイントのナンバリング順(昇順)に平坦なリストへ展開する"""
     sorted_keys = sorted(keypoint_data.keys(), key=lambda x: int(x))
-    two_d_list = [keypoint_data[k] for k in sorted_keys]
-    return np.array(two_d_list)[np.newaxis, ...]  # (1, 17, N) に拡張
+    flat_list = []
+    for k in sorted_keys:
+        flat_list.extend(keypoint_data[k])  # (x, y, vis) または (X, Y, Z, vis) を1つのリストに追加
+    return flat_list
+
+def generate_csv_headers(is_3d=False):
+    """可読性とMotionBERT連携のためのCSVヘッダーを作成"""
+    headers = ["filename"]
+    num_joints = max(BONE_INDEX_MAP.values()) + 1  # インデックスの最大値から関節数を定義
+    coords = ["x", "y", "z", "visibility"] if is_3d else ["x", "y", "visibility"]
+    
+    for j in range(num_joints):
+        for c in coords:
+            headers.append(f"J{j}_{c}")
+    return headers
 
 def process_animation_frames():
     """アーマチュアのアニメーションを1フレームずつ進めてデータを抽出・保存する"""
@@ -146,56 +160,52 @@ def process_animation_frames():
     print(f"🎬 モモーション検出: {action.name} (Frames: {start_frame} to {end_frame})")
     setup_render_settings(scene, OUTPUT_DIR, IMAGE_FORMAT)
 
-    # 既存の出力ファイルを初期化（新規書き込み用）
-    if os.path.exists(OUTPUT_2d): os.remove(OUTPUT_2d)
-    if os.path.exists(OUTPUT_3d): os.remove(OUTPUT_3d)
-
-    all_frames_2d = []
-    all_frames_3d = []
-
-    # --- フレームループ ---
-    for frame in range(start_frame, end_frame + 1):
-        scene.frame_set(frame)  # シーンのフレームを変更（ポーズが自動更新される）
-        print(f"Processing Frame: {frame}/{end_frame}")
+    # --- CSVファイルの新規オープンとヘッダー初期化 ---
+    with open(OUTPUT_2d, mode='w', newline='', encoding='utf-8') as f2d, \
+         open(OUTPUT_3d, mode='w', newline='', encoding='utf-8') as f3d:
+         
+        writer_2d = csv.writer(f2d)
+        writer_3d = csv.writer(f3d)
         
-        frame_2d_data = None
-        frame_3d_data = None
+        # ヘッダー行を書き込み
+        writer_2d.writerow(generate_csv_headers(is_3d=False))
+        writer_3d.writerow(generate_csv_headers(is_3d=True))
 
-        for camera_name in CAMERA_NAMES:
-            camera = bpy.data.objects.get(camera_name)
-            if not camera or camera.type != 'CAMERA': continue
+        # --- フレームループ ---
+        for frame in range(start_frame, end_frame + 1):
+            scene.frame_set(frame)
+            print(f"Processing Frame: {frame}/{end_frame}")
             
-            scene.camera = camera
-            # 依存グラフの更新（これがないと正しいボーン位置が取得できない場合がある）
-            bpy.context.view_layer.update()
+            # 各カメラを順次処理
+            for camera_name in CAMERA_NAMES:
+                camera = bpy.data.objects.get(camera_name)
+                if not camera or camera.type != 'CAMERA': continue
+                
+                scene.camera = camera
+                bpy.context.view_layer.update()
 
-            # 2D/3D 座標抽出
-            kp2d = get_keypoint2d(scene, camera, ARMATURE_NAME)
-            kp3d = get_keypoint3d(scene, camera, ARMATURE_NAME)
-            
-            if kp2d and kp3d:
-                frame_2d_data = arrange_and_collect_keypoint(kp2d)
-                frame_3d_data = arrange_and_collect_keypoint(kp3d)
+                # 2D/3D 座標辞書の取得
+                kp2d = get_keypoint2d(scene, camera, ARMATURE_NAME)
+                kp3d = get_keypoint3d(scene, camera, ARMATURE_NAME)
+                
+                # 画像名（先頭カラムの値）を定義：例「out_Camera1_0001」
+                formatted_number = f"{frame:04d}"
+                image_filename = f"out_{camera_name}_{formatted_number}"
+                
+                # レンダリング実行
+                scene.render.filepath = f"{OUTPUT_DIR}{image_filename}"
+                bpy.ops.render.render(write_still=True)
 
-            # --- 必要に応じてここでレンダリングを実行 ---
-            formatted_number = f"{frame:04d}"
-            scene.render.filepath = f"{OUTPUT_DIR}out_{camera_name}_{formatted_number}"
-            bpy.ops.render.render(write_still=True)
+                # データのフラット化とCSVへの即時一行書き込み
+                if kp2d:
+                    row_2d = [image_filename] + flatten_keypoint_data(kp2d)
+                    writer_2d.writerow(row_2d)
+                    
+                if kp3d:
+                    row_3d = [image_filename] + flatten_keypoint_data(kp3d)
+                    writer_3d.writerow(row_3d)
 
-        if frame_2d_data is not None and frame_3d_data is not None:
-            all_frames_2d.append(frame_2d_data)
-            all_frames_3d.append(frame_3d_data)
-
-    # --- 全フレームのデータを結合してNPZに一括保存 ---
-    if all_frames_2d and all_frames_3d:
-        final_2d_array = np.concatenate(all_frames_2d, axis=0) # (N, 17, 3)
-        final_3d_array = np.concatenate(all_frames_3d, axis=0) # (N, 17, 4)
-        
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        np.savez_compressed(OUTPUT_2d, keypoints_2d=final_2d_array)
-        np.savez_compressed(OUTPUT_3d, S=final_3d_array)
-        
-        print(f"💾 保存完了!\n2D: {final_2d_array.shape} -> {OUTPUT_2d}\n3D: {final_3d_array.shape} -> {OUTPUT_3d}")
+    print(f"💾 CSV保存完了!\n2D: {OUTPUT_2d}\n3D: {OUTPUT_3d}")
 
 if __name__ == "__main__":
     # ---- 実行前にボーン名の一致チェック ----
