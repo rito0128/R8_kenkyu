@@ -2,13 +2,14 @@ import bpy
 import math
 import os
 import glob
+import time
 import numpy as np
 import csv
 from mathutils import Vector, Quaternion, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 
 # --- 設定 ---
-CAMERA_NAMES = ["Camera1", "Camera2"]
+CAMERA_NAMES = ["Camera1", "Camera2", "Camera3", "Camera4", "Camera5", "Camera6", "Camera7", "Camera8", "Camera9", "Camera10", "Camera11", "Camera12"]
 OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generated_demo_img/"
 
 # アノテーションデータの書き出し先ファイル
@@ -229,4 +230,12 @@ if __name__ == "__main__":
         print(f"結果: {len(BONE_INDEX_MAP)}個中 {match_count}個が一致\n")
     # ----------------------------------------
     
+    start_time = time.time()
+
     process_animation_frames()
+
+    end_time = time.time()
+    
+    # 4. 差分を計算して表示
+    elapsed_time = end_time - start_time
+    print(f"\n⏱️ 処理時間: {elapsed_time:.4f} 秒")
