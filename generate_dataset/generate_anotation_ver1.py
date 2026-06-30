@@ -172,17 +172,20 @@ def process_animation_frames():
         writer_3d.writerow(generate_csv_headers(is_3d=True))
 
         # --- フレームループ ---
-        for frame in range(start_frame, end_frame + 1):
-            scene.frame_set(frame)
-            print(f"Processing Frame: {frame}/{end_frame}")
+        for camera_name in CAMERA_NAMES:
+            camera = bpy.data.objects.get(camera_name)
+            if not camera or camera.type != 'CAMERA': 
+                print(f"⚠️ 警告: カメラ '{camera_name}' が見つからないためスキップします。")
+                continue
             
-            # 各カメラを順次処理
-            for camera_name in CAMERA_NAMES:
-                camera = bpy.data.objects.get(camera_name)
-                if not camera or camera.type != 'CAMERA': continue
-                
-                scene.camera = camera
-                bpy.context.view_layer.update()
+            # カメラを切り替える
+            scene.camera = camera
+            print(f"📷 カメラを切り替えました: {camera_name} (モーション全体の連続処理を開始)")
+
+            # 現在のカメラでモーションを最初のフレームから最後まで連続処理
+            for frame in range(start_frame, end_frame + 1):
+                scene.frame_set(frame)  # シーンのフレームを変更（ポーズが自動更新される）
+                bpy.context.view_layer.update()  # 依存グラフの更新
 
                 # 2D/3D 座標辞書の取得
                 kp2d = get_keypoint2d(scene, camera, ARMATURE_NAME)
@@ -195,6 +198,7 @@ def process_animation_frames():
                 # レンダリング実行
                 scene.render.filepath = f"{OUTPUT_DIR}{image_filename}"
                 bpy.ops.render.render(write_still=True)
+                print(f"  └ Rendered: {image_filename}")
 
                 # データのフラット化とCSVへの即時一行書き込み
                 if kp2d:
