@@ -134,7 +134,52 @@ def generate_csv_headers(is_3d=False):
             headers.append(f"J{j}_{c}")
     return headers
 
-def draw_and_save_plots_cv2(image_path, kp2d):
+def get_avatar_bounding_box_2d(scene, camera, armature_name):
+    """
+    アーマチュアに属するすべての子メッシュの頂点から、
+    カメラに映る正確な2Dバウンディングボックス(xmin, ymin, xmax, ymax)を算出する
+    """
+    armature_obj = bpy.data.objects.get(armature_name)
+    if not armature_obj:
+        return None
+
+    x_coords = []
+    y_coords = []
+    
+    # 評価済みの依存グラフを取得（モディファイアやアニメーション適用後の形状を正確に得るため）
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+
+    # アーマチュアの子オブジェクト、または自身配下のメッシュを探索
+    for child in armature_obj.children:
+        if child.type != 'MESH':
+            continue
+            
+        # アニメーション（変形）適用後のメッシュデータを取得
+        eval_obj = child.evaluated_get(depsgraph)
+        mesh = eval_obj.to_mesh()
+        matrix_world = eval_obj.matrix_world
+
+        for vertex in mesh.vertices:
+            # 頂点のグローバル（ワールド）座標を計算
+            v_world = matrix_world @ vertex.co
+            # カメラ平面上の正規化座標 (0.0 ～ 1.0) に変換
+            v_view = world_to_camera_view(scene, camera, v_world)
+            
+            # カメラの画角内かつ前方(z > 0)にある頂点のみを抽出
+            if 0 <= v_view.x <= 1 and 0 <= v_view.y <= 1 and v_view.z > 0:
+                px = v_view.x * RESOLUTION_X
+                py = (1.0 - v_view.y) * RESOLUTION_Y
+                x_coords.append(px)
+                y_coords.append(py)
+                
+        eval_obj.to_mesh_clear()
+
+    if not x_coords:
+        return None # 画面内にアバターが一切写っていない場合
+
+    return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
+
+def draw_and_save_plots_cv2(image_path, kp2d, bbox):
     """保存された画像をOpenCVで読み込み、緑色でキーポイントとインデックスを描画して別名保存する"""
     if not kp2d or not os.path.exists(image_path):
         return
@@ -143,6 +188,15 @@ def draw_and_save_plots_cv2(image_path, kp2d):
     img = cv2.imread(image_path)
     if img is None:
         return
+    
+    # バウンディングボックスを描画する
+    if bbox:
+        xmin, ymin, xmax, ymax = bbox
+        pt1 = (int(xmin), int(ymin))
+        pt2 = (int(xmax), int(ymax))
+        cv2.rectangle(img, pt1, pt2, color=(0, 0, 255), thickness=2)
+        # ラベル追加
+        cv2.putText(img, "Person", (int(xmin), int(ymin) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
 
     # 描画色（緑色）の定義: OpenCVはBGR順なので (0, 255, 0)
     plot_color = (0, 255, 0)
@@ -230,6 +284,8 @@ def process_animation_frames():
                 kp2d = get_keypoint2d(scene, camera, ARMATURE_NAME)
                 kp3d = get_keypoint3d(scene, camera, ARMATURE_NAME)
                 
+                bbox = get_avatar_bounding_box_2d(scene, camera, ARMATURE_NAME)
+                
                 # 画像名（先頭カラムの値）を定義：例「out_Camera1_0001」
                 formatted_number = f"{frame:04d}"
                 image_filename = f"out_{camera_name}_{formatted_number}"
@@ -244,7 +300,7 @@ def process_animation_frames():
 
                 # 3. 拡張子（.png）を結合してOpenCV用のフルパスを作る（ここが機能するようになります）
                 actual_image_path = f"{render_output_path}.{IMAGE_FORMAT.lower()}"
-                draw_and_save_plots_cv2(actual_image_path, kp2d)
+                draw_and_save_plots_cv2(actual_image_path, kp2d, bbox)
 
                 # データのフラット化とCSVへの即時一行書き込み
                 if kp2d:
