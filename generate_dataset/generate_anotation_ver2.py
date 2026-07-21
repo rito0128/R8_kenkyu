@@ -132,6 +132,9 @@ def generate_csv_headers(is_3d=False):
     for j in range(num_joints):
         for c in coords:
             headers.append(f"J{j}_{c}")
+            
+    # 各行の末尾に BBOX カラムを追加
+    headers.extend(["bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax"])
     return headers
 
 def get_avatar_bounding_box_2d(scene, camera, armature_name):
@@ -286,6 +289,8 @@ def process_animation_frames():
                 
                 bbox = get_avatar_bounding_box_2d(scene, camera, ARMATURE_NAME)
                 
+                bbox_data = list(bbox) if bbox else ["", "", "", ""]
+                
                 # 画像名（先頭カラムの値）を定義：例「out_Camera1_0001」
                 formatted_number = f"{frame:04d}"
                 image_filename = f"out_{camera_name}_{formatted_number}"
@@ -304,11 +309,12 @@ def process_animation_frames():
 
                 # データのフラット化とCSVへの即時一行書き込み
                 if kp2d:
-                    row_2d = [image_filename] + flatten_keypoint_data(kp2d)
+                    row_2d = [image_filename] + flatten_keypoint_data(kp2d) + bbox_data
+                    print(f"row_2d: {row_2d}")
                     writer_2d.writerow(row_2d)
                     
                 if kp3d:
-                    row_3d = [image_filename] + flatten_keypoint_data(kp3d)
+                    row_3d = [image_filename] + flatten_keypoint_data(kp3d) + bbox_data
                     writer_3d.writerow(row_3d)
 
     print(f"💾 CSV保存完了!\n2D: {OUTPUT_2d}\n3D: {OUTPUT_3d}")
