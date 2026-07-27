@@ -29,14 +29,34 @@ IMAGE_FORMAT = 'PNG'
 RESOLUTION_X = 1000
 RESOLUTION_Y = 1000
 
-# キーポイントインデックスとボーン名の対応付け
+# キーポイントインデックス、ボーン名、参照位置（tail または head）の対応付け
 BONE_INDEX_MAP = {
-    'mixamorig:Hips': 7, 'mixamorig:Spine': 8, 'mixamorig:Neck': 9, 'mixamorig:Head': 10,
-    'mixamorig:LeftShoulder': 11, 'mixamorig:LeftArm': 12, 'mixamorig:LeftForeArm': 13,
-    'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightForeArm': 16,
-    'mixamorig:LeftUpLeg': 5, 'mixamorig:LeftLeg': 6, 'mixamorig:LeftFoot': 0, 'mixamorig:RightUpLeg': 2,
-    'mixamorig:RightLeg': 3, 'mixamorig:RightFoot': 0, 'mixamorig:Spine1': 17, 'mixamorig:Spine2': 18
+    'mixamorig:Hips': [(0, 'head'), (7, 'tail')],
+    'mixamorig:RightUpLeg': [(1, 'head'), (2, 'tail')],
+    'mixamorig:RightLeg': [(3, 'tail')],
+    'mixamorig:LeftUpLeg': [(4, 'head'), (5, 'tail')],
+    'mixamorig:LeftLeg': [(6, 'tail')],
+    'mixamorig:Spine': [(8, 'tail')],
+    'mixamorig:Neck': [(9, 'tail')],
+    'mixamorig:Head': [(10, 'tail')],
+    'mixamorig:LeftShoulder': [(11, 'tail')],
+    'mixamorig:LeftArm': [(12, 'tail')],
+    'mixamorig:LeftForeArm': [(13, 'tail')],
+    'mixamorig:RightShoulder': [(14, 'tail')],
+    'mixamorig:RightArm': [(15, 'tail')],
+    'mixamorig:RightForeArm': [(16, 'tail')],
+    'mixamorig:Spine1': [(17, 'tail')],
+    'mixamorig:Spine2': [(18, 'tail')],
 }
+# キーポイントインデックスとボーン名の対応付け
+# BONE_INDEX_MAP = {
+#     'mixamorig:Hips': 7, 'mixamorig:Spine': 8, 'mixamorig:Neck': 9, 'mixamorig:Head': 10,
+#     'mixamorig:LeftShoulder': 11, 'mixamorig:LeftArm': 12, 'mixamorig:LeftForeArm': 13,
+#     'mixamorig:RightShoulder': 14, 'mixamorig:RightArm': 15, 'mixamorig:RightForeArm': 16,
+#     'mixamorig:LeftHip': 4, 'mixamorig:LeftUpLeg': 5, 'mixamorig:LeftLeg': 6, 
+#     'mixamorig:RightHip': 1, 'mixamorig:RightUpLeg': 2, 'mixamorig:RightLeg': 3, 
+#     'mixamorig:Spine1': 17, 'mixamorig:Spine2': 18
+# }
 # --------------------
 
 def setup_render_settings(scene, output_dir, format):
@@ -107,7 +127,7 @@ def check_visibility_multi_ray(scene, camera, target_world_location, samples=5):
         return 0  # Not visible（見えない）
 
 def get_keypoint2d(scene, camera, armature_name):
-    """ボーンのワールド座標を画像平面のピクセル座標(と可視性)に変換"""
+    """ボーンのワールド座標(tail/head)を画像平面のピクセル座標(と可視性)に変換"""
     keypoint_2d = {}
     obj = bpy.data.objects.get(armature_name)
     if not obj: return None
@@ -117,30 +137,25 @@ def get_keypoint2d(scene, camera, armature_name):
     for pbone in obj.pose.bones:
         if pbone.name not in BONE_INDEX_MAP: continue
         
-        tail_world = matrix_world @ pbone.tail
-        tail_view = world_to_camera_view(scene, camera, tail_world)
-        tail_px = (tail_view.x * RESOLUTION_X, (1.0 - tail_view.y) * RESOLUTION_Y)
+        # 1つのボーンに紐づくすべての設定 [(idx, pos_type), ...] を展開して処理
+        for target_idx, pos_type in BONE_INDEX_MAP[pbone.name]:
+            bone_loc = getattr(pbone, pos_type)
+            
+            pt_world = matrix_world @ bone_loc
+            pt_view = world_to_camera_view(scene, camera, pt_world)
+            pt_px = (pt_view.x * RESOLUTION_X, (1.0 - pt_view.y) * RESOLUTION_Y)
 
-        # 可視性判定
-        if not (0 <= tail_view.x <= 1 and 0 <= tail_view.y <= 1 and tail_view.z > 0):
-            visibility = 0
-        else:
-            visibility = check_visibility_multi_ray(scene, camera, tail_world)
+            if not (0 <= pt_view.x <= 1 and 0 <= pt_view.y <= 1 and pt_view.z > 0):
+                visibility = 0
+            else:
+                visibility = check_visibility_multi_ray(scene, camera, pt_world)
 
-        keypoint_2d[BONE_INDEX_MAP[pbone.name]] = (tail_px[0], tail_px[1], visibility)
-        
-        # 特殊処理: spine.001 の head をインデックス 0 と判定する場合
-        if pbone.name == "spine.001":
-            head_world = matrix_world @ pbone.head
-            head_view = world_to_camera_view(scene, camera, head_world)
-            head_px = (head_view.x * RESOLUTION_X, (1.0 - head_view.y) * RESOLUTION_Y)
-            head_vis = check_visibility_multi_ray(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
-            keypoint_2d[0] = (head_px[0], head_px[1], head_vis)
+            keypoint_2d[target_idx] = (pt_px[0], pt_px[1], visibility)
 
     return keypoint_2d
 
 def get_keypoint3d(scene, camera, armature_name):
-    """ボーン座標をワールド3D座標(と可視性)で取得"""
+    """ボーン座標(tail/head)をワールド3D座標(と可視性)で取得"""
     keypoint_3d = {}
     obj = bpy.data.objects.get(armature_name)
     if not obj: return None
@@ -150,17 +165,14 @@ def get_keypoint3d(scene, camera, armature_name):
     for pbone in obj.pose.bones:
         if pbone.name not in BONE_INDEX_MAP: continue
         
-        tail_world = matrix_world @ pbone.tail
-        tail_view = world_to_camera_view(scene, camera, tail_world)
-        visibility = check_visibility_multi_ray(scene, camera, tail_world) if (0 <= tail_view.x <= 1 and 0 <= tail_view.y <= 1 and tail_view.z > 0) else 0
+        for target_idx, pos_type in BONE_INDEX_MAP[pbone.name]:
+            bone_loc = getattr(pbone, pos_type)
+            
+            pt_world = matrix_world @ bone_loc
+            pt_view = world_to_camera_view(scene, camera, pt_world)
+            visibility = check_visibility_multi_ray(scene, camera, pt_world) if (0 <= pt_view.x <= 1 and 0 <= pt_view.y <= 1 and pt_view.z > 0) else 0
 
-        keypoint_3d[BONE_INDEX_MAP[pbone.name]] = (tail_world.x, tail_world.y, tail_world.z, visibility)
-        
-        if pbone.name == "spine.001":
-            head_world = matrix_world @ pbone.head
-            head_view = world_to_camera_view(scene, camera, head_world)
-            head_vis = check_visibility_multi_ray(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
-            keypoint_3d[0] = (head_world.x, head_world.y, head_world.z, head_vis)
+            keypoint_3d[target_idx] = (pt_world.x, pt_world.y, pt_world.z, visibility)
 
     return keypoint_3d
 
@@ -172,18 +184,21 @@ def flatten_keypoint_data(keypoint_data):
         flat_list.extend(keypoint_data[k])  # (x, y, vis) または (X, Y, Z, vis) を1つのリストに追加
     return flat_list
 
-# --- 【変更点1】ヘッダー作成関数に BBOX 用カラムを追加 ---
 def generate_csv_headers(is_3d=False):
     """可読性とMotionBERT連携のためのCSVヘッダーを作成"""
     headers = ["filename"]
-    num_joints = max(BONE_INDEX_MAP.values()) + 1  # インデックスの最大値から関節数を定義
+    
+    # 二重ループでリスト内の全インデックスを取り出し、最大値を算出
+    all_indices = [idx for targets in BONE_INDEX_MAP.values() for idx, _ in targets]
+    max_idx = max(all_indices)
+    num_joints = max_idx + 1
+    
     coords = ["x", "y", "z", "visibility"] if is_3d else ["x", "y", "visibility"]
     
     for j in range(num_joints):
         for c in coords:
             headers.append(f"J{j}_{c}")
             
-    # 各行の末尾に BBOX カラムを追加
     headers.extend(["bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax"])
     return headers
 
