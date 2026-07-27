@@ -45,17 +45,66 @@ def setup_render_settings(scene, output_dir, format):
     scene.render.resolution_x = RESOLUTION_X
     scene.render.resolution_y = RESOLUTION_Y
 
-def check_visibility(scene, camera, target_world_location):
-    """カメラからターゲット点に向かってレイを飛ばし、メッシュに遮られているか判定する"""
-    cam_location = camera.matrix_world.to_translation()
-    direction = target_world_location - cam_location
+def check_visibility_multi_ray(scene, camera, target_world_location, samples=5):
+    """
+    ターゲット周辺から複数のレイを飛ばし、可視割合(0.0 ~ 1.0)または段階評価(0, 1, 2)を返す
+    """
+    cam_matrix = camera.matrix_world
+    cam_location = cam_matrix.to_translation()
     depsgraph = bpy.context.evaluated_depsgraph_get()
     
-    # ターゲットの直前でヒットするか判定 (小さなオフセットを持たせる)
-    hit, loc, norm, index, obj, matrix = scene.ray_cast(
-        depsgraph, cam_location, direction, distance=direction.length - 0.01
-    )
-    return 0 if hit else 1
+    # ターゲットからカメラ方向への単位ベクトル
+    to_cam = (cam_location - target_world_location).normalized()
+    
+    # 1. 骨の内部（肉の中）にレイが埋まるのを防ぐため、カメラ側に1.5cm手前に寄せる
+    adjusted_target = target_world_location + (to_cam * 0.015)
+    
+    # カメラの「右方向(X)」と「上方向(Y)」の基底ベクトルを取得（ワールド座標系）
+    cam_right = cam_matrix.to_3x3() @ Vector((1, 0, 0))
+    cam_up = cam_matrix.to_3x3() @ Vector((0, 1, 0))
+    
+    # 2. カメラの画角平面に沿った安全なオフセット（半径5mm）
+    r = 0.005
+    offsets = [
+        Vector((0, 0, 0)),
+        cam_right * r,
+        cam_right * (-r),
+        cam_up * r,
+        cam_up * (-r)
+    ]
+    
+    visible_hits = 0
+    
+    for offset_vec in offsets[:samples]:
+        sample_target = adjusted_target + offset_vec
+        direction = sample_target - cam_location
+        dist = direction.length
+        
+        if dist < 0.001:
+            visible_hits += 1
+            continue
+            
+        # レイを飛ばす（ターゲットの2cm手前まででヒットするか判定して余裕を持たせる）
+        hit, loc, norm, index, obj, matrix = scene.ray_cast(
+            depsgraph, 
+            cam_location, 
+            direction.normalized(), 
+            distance=dist - 0.2
+        )
+        
+        if not hit:
+            visible_hits += 1
+
+    # 可視率を計算
+    vis_ratio = visible_hits / samples
+    
+    # COCOフォーマット等の定義に合わせて判定
+    if vis_ratio >= 0.6:
+        return 2  # Visible（はっきり見える）
+    elif vis_ratio >= 0.2:
+        return 1  # Partially visible / Occluded（一部見えている/遮蔽）
+    else:
+        return 0  # Not visible（見えない）
 
 def get_keypoint2d(scene, camera, armature_name):
     """ボーンのワールド座標を画像平面のピクセル座標(と可視性)に変換"""
@@ -76,7 +125,7 @@ def get_keypoint2d(scene, camera, armature_name):
         if not (0 <= tail_view.x <= 1 and 0 <= tail_view.y <= 1 and tail_view.z > 0):
             visibility = 0
         else:
-            visibility = check_visibility(scene, camera, tail_world)
+            visibility = check_visibility_multi_ray(scene, camera, tail_world)
 
         keypoint_2d[BONE_INDEX_MAP[pbone.name]] = (tail_px[0], tail_px[1], visibility)
         
@@ -85,7 +134,7 @@ def get_keypoint2d(scene, camera, armature_name):
             head_world = matrix_world @ pbone.head
             head_view = world_to_camera_view(scene, camera, head_world)
             head_px = (head_view.x * RESOLUTION_X, (1.0 - head_view.y) * RESOLUTION_Y)
-            head_vis = check_visibility(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
+            head_vis = check_visibility_multi_ray(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
             keypoint_2d[0] = (head_px[0], head_px[1], head_vis)
 
     return keypoint_2d
@@ -103,14 +152,14 @@ def get_keypoint3d(scene, camera, armature_name):
         
         tail_world = matrix_world @ pbone.tail
         tail_view = world_to_camera_view(scene, camera, tail_world)
-        visibility = check_visibility(scene, camera, tail_world) if (0 <= tail_view.x <= 1 and 0 <= tail_view.y <= 1 and tail_view.z > 0) else 0
+        visibility = check_visibility_multi_ray(scene, camera, tail_world) if (0 <= tail_view.x <= 1 and 0 <= tail_view.y <= 1 and tail_view.z > 0) else 0
 
         keypoint_3d[BONE_INDEX_MAP[pbone.name]] = (tail_world.x, tail_world.y, tail_world.z, visibility)
         
         if pbone.name == "spine.001":
             head_world = matrix_world @ pbone.head
             head_view = world_to_camera_view(scene, camera, head_world)
-            head_vis = check_visibility(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
+            head_vis = check_visibility_multi_ray(scene, camera, head_world) if (0 <= head_view.x <= 1 and 0 <= head_view.y <= 1 and head_view.z > 0) else 0
             keypoint_3d[0] = (head_world.x, head_world.y, head_world.z, head_vis)
 
     return keypoint_3d
@@ -123,6 +172,7 @@ def flatten_keypoint_data(keypoint_data):
         flat_list.extend(keypoint_data[k])  # (x, y, vis) または (X, Y, Z, vis) を1つのリストに追加
     return flat_list
 
+# --- 【変更点1】ヘッダー作成関数に BBOX 用カラムを追加 ---
 def generate_csv_headers(is_3d=False):
     """可読性とMotionBERT連携のためのCSVヘッダーを作成"""
     headers = ["filename"]
@@ -149,26 +199,20 @@ def get_avatar_bounding_box_2d(scene, camera, armature_name):
     x_coords = []
     y_coords = []
     
-    # 評価済みの依存グラフを取得（モディファイアやアニメーション適用後の形状を正確に得るため）
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
-    # アーマチュアの子オブジェクト、または自身配下のメッシュを探索
     for child in armature_obj.children:
         if child.type != 'MESH':
             continue
             
-        # アニメーション（変形）適用後のメッシュデータを取得
         eval_obj = child.evaluated_get(depsgraph)
         mesh = eval_obj.to_mesh()
         matrix_world = eval_obj.matrix_world
 
         for vertex in mesh.vertices:
-            # 頂点のグローバル（ワールド）座標を計算
             v_world = matrix_world @ vertex.co
-            # カメラ平面上の正規化座標 (0.0 ～ 1.0) に変換
             v_view = world_to_camera_view(scene, camera, v_world)
             
-            # カメラの画角内かつ前方(z > 0)にある頂点のみを抽出
             if 0 <= v_view.x <= 1 and 0 <= v_view.y <= 1 and v_view.z > 0:
                 px = v_view.x * RESOLUTION_X
                 py = (1.0 - v_view.y) * RESOLUTION_Y
@@ -178,12 +222,12 @@ def get_avatar_bounding_box_2d(scene, camera, armature_name):
         eval_obj.to_mesh_clear()
 
     if not x_coords:
-        return None # 画面内にアバターが一切写っていない場合
+        return None
 
     return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
 
 def draw_and_save_plots_cv2(image_path, kp2d, bbox):
-    """保存された画像をOpenCVで読み込み、緑色でキーポイントとインデックスを描画して別名保存する"""
+    """保存された画像をOpenCVで読み込み、可視性(信頼度)に応じた色でキーポイントとインデックスを描画して別名保存する"""
     if not kp2d or not os.path.exists(image_path):
         return
 
@@ -192,20 +236,25 @@ def draw_and_save_plots_cv2(image_path, kp2d, bbox):
     if img is None:
         return
     
-    # バウンディングボックスを描画する
+    # バウンディングボックスの描画
     if bbox:
         xmin, ymin, xmax, ymax = bbox
         pt1 = (int(xmin), int(ymin))
         pt2 = (int(xmax), int(ymax))
         cv2.rectangle(img, pt1, pt2, color=(0, 0, 255), thickness=2)
-        # ラベル追加
         cv2.putText(img, "Person", (int(xmin), int(ymin) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
 
-    # 描画色（緑色）の定義: OpenCVはBGR順なので (0, 255, 0)
-    plot_color = (0, 255, 0)
-
     for idx, (px, py, vis) in kp2d.items():
-        # OpenCVの座標引数は整数型(int)が必須のためキャスト
+        # --- 【変更点】 信頼度（vis）の値に応じて描画色を分岐 (OpenCVはBGR順) ---
+        if vis == 1:
+            plot_color = (0, 255, 0)     # 緑色
+        elif vis == 0:
+            plot_color = (0, 165, 255)   # オレンジ色
+        else:
+            plot_color = (255, 0, 0)     # 青色 (信頼度2など)
+        # -------------------------------------------------------------------
+
+        # 座標を整数型にキャスト
         center = (int(px), int(py))
             
         # 1. キーポイントの点を描画 (中心座標, 半径4ピクセル, 塗りつぶし=-1)
@@ -234,83 +283,66 @@ def process_animation_frames():
 
     action = armature.animation_data.action
     
-    # ====================================================================
-    # 【確実な対策】HipsボーンのX移動(array_index=0)とY移動(array_index=1)のFカーブを削除
-    # ====================================================================
     fcurves_to_remove = []
     for fc in action.fcurves:
-        # mixamorig:Hipsボーンの位置アニメーションを探す
         if 'pose.bones["mixamorig:Hips"].location' in fc.data_path:
-            # array_index: 0=X, 1=Y, 2=Z。 XとY（水平移動）のデータを削除対象にする
             if fc.array_index in [0, 1]:
                 fcurves_to_remove.append(fc)
                 
     for fc in fcurves_to_remove:
         action.fcurves.remove(fc)
     print(f"🧹 Hipsボーンの水平移動データをアニメーションから削除しました。")
-    # ====================================================================
     
     start_frame = int(action.frame_range[0])
     end_frame = int(action.frame_range[1])
     
-    print(f"🎬 モモーション検出: {action.name} (Frames: {start_frame} to {end_frame})")
+    print(f"🎬 モーション検出: {action.name} (Frames: {start_frame} to {end_frame})")
     setup_render_settings(scene, OUTPUT_DIR, IMAGE_FORMAT)
 
-    # --- CSVファイルの新規オープンとヘッダー初期化 ---
     with open(OUTPUT_2d, mode='w', newline='', encoding='utf-8') as f2d, \
          open(OUTPUT_3d, mode='w', newline='', encoding='utf-8') as f3d:
          
         writer_2d = csv.writer(f2d)
         writer_3d = csv.writer(f3d)
         
-        # ヘッダー行を書き込み
         writer_2d.writerow(generate_csv_headers(is_3d=False))
         writer_3d.writerow(generate_csv_headers(is_3d=True))
 
-        # --- フレームループ ---
         for camera_name in CAMERA_NAMES:
             camera = bpy.data.objects.get(camera_name)
             if not camera or camera.type != 'CAMERA': 
                 print(f"⚠️ 警告: カメラ '{camera_name}' が見つからないためスキップします。")
                 continue
             
-            # カメラを切り替える
             scene.camera = camera
             print(f"📷 カメラを切り替えました: {camera_name} (モーション全体の連続処理を開始)")
 
-            # 現在のカメラでモーションを最初のフレームから最後まで連続処理
             for frame in range(start_frame, end_frame + 1):
-                scene.frame_set(frame)  # シーンのフレームを変更（ポーズが自動更新される）
-                bpy.context.view_layer.update()  # 依存グラフの更新
+                scene.frame_set(frame)
+                bpy.context.view_layer.update()
 
-                # 2D/3D 座標辞書の取得
                 kp2d = get_keypoint2d(scene, camera, ARMATURE_NAME)
                 kp3d = get_keypoint3d(scene, camera, ARMATURE_NAME)
                 
                 bbox = get_avatar_bounding_box_2d(scene, camera, ARMATURE_NAME)
                 
+                # --- 【変更点2】BBOXデータをリスト形式に整形 ---
                 bbox_data = list(bbox) if bbox else ["", "", "", ""]
                 
-                # 画像名（先頭カラムの値）を定義：例「out_Camera1_0001」
-                formatted_number = f"{frame:04d}"
-                image_filename = f"out_{camera_name}_{formatted_number}"
+                image_filename = f"out_{camera_name}_{frame:04d}"
                 
-                # 1. まず変数に拡張子なしのベースパスを格納する
                 render_output_path = os.path.join(OUTPUT_DIR, image_filename)
 
-                # 2. Blenderの出力先に指定してレンダリング
                 scene.render.filepath = render_output_path
                 bpy.ops.render.render(write_still=True)
                 print(f"  └ Rendered: {image_filename}")
 
-                # 3. 拡張子（.png）を結合してOpenCV用のフルパスを作る（ここが機能するようになります）
                 actual_image_path = f"{render_output_path}.{IMAGE_FORMAT.lower()}"
                 draw_and_save_plots_cv2(actual_image_path, kp2d, bbox)
 
-                # データのフラット化とCSVへの即時一行書き込み
+                # --- 【変更点3】各行の末尾に bbox_data を追加して書き込み ---
                 if kp2d:
                     row_2d = [image_filename] + flatten_keypoint_data(kp2d) + bbox_data
-                    print(f"row_2d: {row_2d}")
                     writer_2d.writerow(row_2d)
                     
                 if kp3d:
@@ -318,10 +350,8 @@ def process_animation_frames():
                     writer_3d.writerow(row_3d)
 
     print(f"💾 CSV保存完了!\n2D: {OUTPUT_2d}\n3D: {OUTPUT_3d}")
-    
 
 if __name__ == "__main__":
-    # ---- 実行前にボーン名の一致チェック ----
     armature = bpy.data.objects.get(ARMATURE_NAME)
     if armature:
         print("\n--- 【デバッグ】Blender内のボーン名一覧 ---")
@@ -336,7 +366,6 @@ if __name__ == "__main__":
             else:
                 print(f"⚠️ マッチしないボーン: {b_name}")
         print(f"結果: {len(BONE_INDEX_MAP)}個中 {match_count}個が一致\n")
-    # ----------------------------------------
     
     start_time = time.time()
 
@@ -344,6 +373,5 @@ if __name__ == "__main__":
 
     end_time = time.time()
     
-    # 4. 差分を計算して表示
     elapsed_time = end_time - start_time
     print(f"\n⏱️ 処理時間: {elapsed_time:.4f} 秒")
