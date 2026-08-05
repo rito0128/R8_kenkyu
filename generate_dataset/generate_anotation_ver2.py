@@ -31,22 +31,22 @@ RESOLUTION_Y = 1000
 
 # キーポイントインデックス、ボーン名、参照位置（tail または head）の対応付け
 BONE_INDEX_MAP = {
-    'mixamorig:Hips': [(0, 'head'), (7, 'tail')],
-    'mixamorig:RightUpLeg': [(1, 'head'), (2, 'tail')],
-    'mixamorig:RightLeg': [(3, 'tail')],
-    'mixamorig:LeftUpLeg': [(4, 'head'), (5, 'tail')],
-    'mixamorig:LeftLeg': [(6, 'tail')],
-    'mixamorig:Spine': [(8, 'tail')],
-    'mixamorig:Neck': [(9, 'tail')],
-    'mixamorig:Head': [(10, 'tail')],
-    'mixamorig:LeftShoulder': [(11, 'tail')],
-    'mixamorig:LeftArm': [(12, 'tail')],
-    'mixamorig:LeftForeArm': [(13, 'tail')],
-    'mixamorig:RightShoulder': [(14, 'tail')],
-    'mixamorig:RightArm': [(15, 'tail')],
-    'mixamorig:RightForeArm': [(16, 'tail')],
-    'mixamorig:Spine1': [(17, 'tail')],
-    'mixamorig:Spine2': [(18, 'tail')],
+    'mixamorig:Hips': [(13, 'head'), (14, 'tail')], # 
+    'mixamorig:RightUpLeg': [(8, 'head'), (10, 'tail')],
+    'mixamorig:RightLeg': [(12, 'tail')],
+    'mixamorig:LeftUpLeg': [(7, 'head'), (9, 'tail')],
+    'mixamorig:LeftLeg': [(11, 'tail')],
+    'mixamorig:Spine': [(15, 'tail')],# 
+    'mixamorig:Neck': [(18, 'tail')],# 
+    'mixamorig:Head': [(0, 'tail')],
+    'mixamorig:LeftShoulder': [(1, 'tail')],
+    'mixamorig:LeftArm': [(3, 'tail')],
+    'mixamorig:LeftForeArm': [(5, 'tail')],
+    'mixamorig:RightShoulder': [(2, 'tail')],
+    'mixamorig:RightArm': [(4, 'tail')],
+    'mixamorig:RightForeArm': [(6, 'tail')],
+    'mixamorig:Spine1': [(16, 'tail')],# 
+    'mixamorig:Spine2': [(17, 'tail')],# 
 }
 # キーポイントインデックスとボーン名の対応付け
 # BONE_INDEX_MAP = {
