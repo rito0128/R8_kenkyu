@@ -14,8 +14,8 @@ from mathutils import Vector, Quaternion, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 
 # --- 設定 ---
-CAMERA_NAMES = ["Camera1"]
-# CAMERA_NAMES = ["Camera1", "Camera2", "Camera3", "Camera4", "Camera5", "Camera6", "Camera7", "Camera8", "Camera9", "Camera10", "Camera11", "Camera12"]
+# CAMERA_NAMES = ["Camera1"]
+CAMERA_NAMES = ["Camera1", "Camera2", "Camera3", "Camera4", "Camera5", "Camera6", "Camera7", "Camera8", "Camera9", "Camera10", "Camera11", "Camera12"]
 OUTPUT_DIR = "C:/Users/sinki/R8_kenkyu/generated_demo_img/"
 
 # アノテーションデータの書き出し先ファイル
