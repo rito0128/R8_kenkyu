@@ -3,7 +3,7 @@ import json
 import os
 
 # --- 設定 ---
-CSV_FILE_PATH = "C:/Users/sinki/R8_kenkyu/generated_demo_img/test_2d_annotation.csv"
+CSV_FILE_PATH = "C:/Users/sinki/R8_kenkyu/generated_demo_img/merged_2d_annotation.csv"
 JSON_OUTPUT_PATH = "C:/Users/sinki/R8_kenkyu/generated_demo_img/coco_annotations.json"
 
 # 画像の解像度（これまでのコード設定に合わせる）
