@@ -43,6 +43,25 @@ zikkenn/
         ├── plot_motionbert_lengths.py    # 上記CSVからグラフ生成
         ├── motionbert_keypoint_lengths.csv
         └── graphs/                       # 個別 + summary
+
+# 以下、後日追加されたもの
+├── for_test_keypoint_17_motion_007/   # 拡張前(17点)モデルでの同一データに対する推定結果(Camera1のみ)
+│   ├── pose2d/predictions/motion_007_Camera1.json   # 2D(COCO17形式)、事前学習HRNetそのまま
+│   ├── predictions/motion_007_Camera1.json          # 3D(H36M17形式)、事前学習MotionBERTそのまま
+│   └── run.log, pose2d/run.log
+├── A-14-2_noguchi.pptx                # 発表スライド(スライド7〜11に考察を反映済み)
+├── build_slides.py                    # pptxへの反映スクリプト(A-14-2_noguchi.pptxを直接上書き)
+├── SESSION_NOTES.md                   # 本ファイル
+├── spine_cv_summary.{csv,png,eps}          # 首〜腰6区間のCVまとめ(2D全カメラ/Camera1, 3D Camera1)
+├── compute_spine_cv_summary.py
+├── flexibility_angles_summary.{csv,png,eps}    # spine0〜4+左右肘膝、計9関節の角度要約表
+├── flexibility_angles_frames.csv               # 上記の元になったフレームごとの角度生データ
+├── flexibility_angles_{2d,3d}_camera1.{png,eps} # フレーム-角度グラフ(脊柱/四肢の2パネル)
+├── compute_flexibility_angles.py
+├── neck_waist_length.csv                       # 首-腰長さのフレームごとの生データ(17点/19点/正解)
+├── neck_waist_length_17kp.{png,eps}             # 17点モデル単体のグラフ
+├── neck_waist_length_comparison.{png,eps}       # 17点/19点/正解の比較グラフ
+└── compute_neck_waist_length.py
 ```
 
 2Dと3Dでキーポイントのペア定義(`KEYPOINT_PAIRS`)が異なるため、`keypoint_common.py`は
@@ -206,3 +225,66 @@ MotionBertの`keypoint_scores`は全フレーム常に1.0固定で、自己申�
 を使い、`Slides.Item(n).Export(path, "PNG", w, h)`でスライドを画像化してQAした。
 また`scripts/office/validate.py`は既定のロケール(cp932)でXMLを読もうとして失敗するため、
 `PYTHONUTF8=1`を付けて実行する必要があった。
+
+## 追記: CVの定義について（2026-08-28）
+
+CV(変動係数) = 標準偏差/平均。標準偏差と違い無次元(比率)なので、単位・スケールが異なるデータ
+(推定=正規化された無次元値 vs 正解=実寸)同士でも「相対的なばらつきの大きさ」を直接比較できる、
+というのが本検証でCVを多用している理由。ただし系統的なバイアス(スケールのズレそのもの)は
+CVからは分からない点、平均が0に近いと不安定になる点には注意。matplotlib生成物では日本語フォント
+指定(`plt.rcParams["font.family"] = "Yu Gothic"`、このPCで利用可能なフォントの一つ)が無いと
+文字化けする点も判明（デフォルトのDejaVu SansはCJKグリフを含まない）。
+
+## 追記: 首〜腰6区間CVのまとめ表（2D全カメラ/Camera1、3D Camera1）（2026-08-28）
+
+`compute_spine_cv_summary.py`で、head-spine0-spine1-…-spine5の6区間について、
+2D(全カメラプール / Camera1のみ)と3D(Camera1のみ)のCVを1つの表にまとめた
+（`spine_cv_summary.csv/.png/.eps`）。
+
+**重要な注意点**: 「2D全カメラ」列は12カメラ1212フレームを1つにプールして計算したCVであり、
+以前発見したCamera2/3の誤検出（spine3-spine4が数千pxに飛ぶ等）が混入するため、
+spine2-spine3で5.1、spine3-spine4で3.85といった非常に大きな値になる。これは「真のフレーム間
+ジッター」ではなく「一部カメラの破綻を含む全体のばらつき」であり、Camera1のみの列(0.12〜0.28程度)
+とは意味が異なる。3D(Camera1)の推定CV(0.21〜0.30)・正解CV(ほぼ0)は前述の考察と同じ数値。
+
+## 追記: 柔軟性評価の別手法 — spine0〜4を含む9関節の角度比較（2026-08-28）
+
+前回の(b)柔軟性評価は肘・膝のみだったが、`compute_flexibility_angles.py`で脊柱側にも拡張。
+head-spine0-spine1-…-spine5の鎖のうち、内部の5関節(spine0〜spine4)は隣接2点から3点角度を
+計算できるが、**両端のhead・spine5は隣接点が1つしかないため単独では角度を計算できない**
+（headはspine0の角度計算の腕として、spine5はspine4の角度計算の腕として使う形になる）。
+
+2D・3DともCamera1データで、推定・正解の角度を計算し1つの要約表(可動範囲/相関/MAE)にまとめた
+（`flexibility_angles_summary.csv/.png/.eps`、フレームごとの生データは`flexibility_angles_frames.csv`）。
+グラフは2D/3Dそれぞれ`flexibility_angles_{2d,3d}_camera1.png/.eps`で、脊柱グループと四肢グループの
+2パネル、推定=実線・正解=破線・関節ごとに色分け。
+
+**目立った結果**: spine0の角度が2D・3Dとも推定・正解ともに0〜15°程度と極端に小さい。これは誤差
+ではなく、head-spine0-spine1という3点の配置がこのキーポイント定義上もともと鋭角になっている
+（構造的な特徴）ためと判明（推定/正解で一貫して同じ傾向のため）。3Dのright_elbow(相関0.13)や
+2Dのleft_knee(相関-0.56)など、以前から精度が低いとわかっている関節は今回も同様の傾向。
+
+## 追記: 拡張前(17点)モデルとの比較 — 首-腰の長さ（2026-08-28）
+
+新たに`for_test_keypoint_17_motion_007`(拡張前の17点モデルでの推定結果, Camera1のみ,
+2D=事前学習HRNet(COCO17点)、3D=事前学習MotionBERT(H36M17点)そのもの)が追加されたため、
+`compute_neck_waist_length.py`で「首から腰にかけての長さ」を計算し、19点モデル(拡張後)・
+正解データと比較した。
+
+- **17点モデルの2D**: 首・腰のキーポイントが無いため、首≈左右肩の中点、腰≈左右股関節の中点で概算
+- **17点モデルの3D**: H36M17点形式のため、首=Neck/Nose(idx9)、腰=Hip/root(idx0)をそのまま使用
+  （Hip(idx0)が全フレームで原点(0,0,z)固定であることを確認し、標準的なH36M順序と判断した）
+- **19点モデル・正解データ**: 従来通りspine5(idx18)-spine0(idx13)間の直線距離
+
+出力: `neck_waist_length.csv`(フレームごとの生データ)、`neck_waist_length_17kp.png/.eps`
+(17点モデル単体)、`neck_waist_length_comparison.png/.eps`(17点/19点/正解の比較、2D/3D別パネル)。
+
+**結果**: 2D(単位px共通)では17点モデルが正解データの全体トレンドをよく追えている一方、
+19点モデル(拡張後)はフレーム25〜30付近で大きく落ち込む外れ値が見られた。3Dは17点モデル・
+19点モデル・正解データがそれぞれ独立に正規化された異なるスケールを持つため、絶対値の大小
+（19点モデルが正解の5〜6倍等）はモデルの優劣を意味せず、トレンドの形状比較に留めるべき。
+
+**注意**: 出力先に、本タスク着手より前のタイムスタンプで似た名前だが計算方法が異なり
+(正解データとの比較が欠けている等)不完全な中間ファイルが5つ見つかり、混乱を避けるため削除した。
+おそらく同一セッション内での要約(コンテキスト圧縮)を挟んだことによる、以前の下書き実行の
+残骸と思われる。今後同様の状況に気づいた場合は、上書き・削除前に必ず内容を確認すること。
