@@ -30,7 +30,7 @@ OUTPUT_3d = os.path.join(OUTPUT_DIR, f'{blend_stem}_3d_annotation.csv')
 
 CAMERA_NAMES = ["Camera1", "Camera2", "Camera3", "Camera4", "Camera5", "Camera6", "Camera7", "Camera8", "Camera9", "Camera10", "Camera11", "Camera12"]
 ARMATURE_NAME = "Armature"
-BACKGROUND_PLANE_NAME = "Plane"
+BACKGROUND_PLANE_NAME = "Background"
 PLANE_OFFSET_BEHIND = 1.0
 
 IMAGE_FORMAT = 'PNG'
@@ -39,7 +39,7 @@ RESOLUTION_Y = 1000
 
 # 背景の板ポリ
 BACKGROUND_PLANE_NAME = "Background"   # 対象の板ポリゴンオブジェクト名
-PLANE_OFFSET_BEHIND = 4.0         # アバターからカメラ奥方向への距離（メートル単位）
+PLANE_OFFSET_BEHIND = 40      # アバターからカメラ奥方向への距離（メートル単位）
 
 # キーポイントインデックス、ボーン名、参照位置（tail または head）の対応付け
 BONE_INDEX_MAP = {
