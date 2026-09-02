@@ -418,7 +418,7 @@ def process_animation_frames():
                 # print(f"  └ Rendered: {image_filename}")
 
                 actual_image_path = f"{render_output_path}.{IMAGE_FORMAT.lower()}"
-                draw_and_save_plots_cv2(actual_image_path, kp2d, bbox)
+                # draw_and_save_plots_cv2(actual_image_path, kp2d, bbox)
 
                 # --- 【変更点3】各行の末尾に bbox_data を追加して書き込み ---
                 if kp2d:
