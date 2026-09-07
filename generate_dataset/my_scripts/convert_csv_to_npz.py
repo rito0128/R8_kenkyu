@@ -75,8 +75,8 @@ def convert_blender_csv_to_motionbert_npz(
 if __name__ == '__main__':
     # 実行
     convert_blender_csv_to_motionbert_npz(
-        csv_2d_path='test_2d_annotation.csv',
-        csv_3d_path='test_3d_annotation.csv',
+        csv_2d_path='merged_2d_annotation.csv',
+        csv_3d_path='merged_3d_annotation.csv',
         output_npz_path='judo_train.npz',
         num_joints=19
     )
