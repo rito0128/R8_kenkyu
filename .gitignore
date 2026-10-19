@@ -12,3 +12,8 @@ generated_demo_img/
 
 # ファイル
 Assembly-CSharp.csproj
+# 推論の可視化画像（再生成可能・大容量のためGit管理外）
+zikkenn2/17pt_2d/*/visualizations/
+zikkenn2/19pt_2d/*/visualizations/
+zikkenn2/17pt_2d3d/*/frames/
+zikkenn2/19pt_2d3d/*/frames/

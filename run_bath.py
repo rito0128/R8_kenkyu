@@ -10,7 +10,7 @@ BLENDER_PATH = r"C:\Program Files\Blender Foundation\Blender 4.5\blender.exe"
 BLEND_DIR = r"C:\Users\sinki\R8_kenkyu\generate_dataset\blender_file\run"
 
 # 実行するBlenderスクリプトのフルパス
-SCRIPT_PATH = r"C:\Users\sinki\R8_kenkyu\generate_dataset\generate_anotation_ver3.py"
+SCRIPT_PATH = r"C:\Users\sinki\R8_kenkyu\generate_dataset\generate_anotation_ver4.py"
 
 def main():
     blend_files = glob.glob(os.path.join(BLEND_DIR, "*.blend"))
